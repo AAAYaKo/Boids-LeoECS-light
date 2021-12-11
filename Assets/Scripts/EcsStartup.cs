@@ -1,6 +1,7 @@
 using DataStructures.ViliWonka.KDTree;
 using Leopotam.EcsLite;
 using Leopotam.EcsLite.Di;
+using System.Collections;
 using UnityEngine;
 using Voody.UniLeo.Lite;
 
@@ -9,49 +10,61 @@ namespace Client
 	public sealed class EcsStartup : MonoBehaviour
 	{
 		[SerializeField] private GameObject prefab;
-		private EcsSystems _systems;
+		private EcsSystems _updateSystems;
+
 
 		private void Start()
 		{
-			//for (int i = 0; i < 512; i++)
-			//	Instantiate(prefab, Random.insideUnitSphere * 16, Random.rotation);
-			// register your shared data here, for example:
-			// var shared = new Shared ();
-			// systems = new EcsSystems (new EcsWorld (), shared);
-			_systems = new EcsSystems(new EcsWorld());
-			_systems
+			StartCoroutine(Spawn());
+
+			var defaultWorld = new EcsWorld();
+			_updateSystems = new EcsSystems(defaultWorld);
+
+			_updateSystems
 				.Add(new RunSyncPositionsSystem())
 				.Add(new RunSyncRotationsSystem())
 				.Add(new RunCloudSystem())
 				.Add(new RunFindClosestSystem())
+				.Add(new RunBoidFirstRuleSystem())
+				.Add(new RunBoidSecondRuleSystem())
+				.Add(new RunBoidThirdRuleSystem())
+				.Add(new RunBoidFourthRuleSystem())
+				.Add(new RunAffectToBoidVelocitySystem())
 				.Add(new RunMoveSystem())
-
-				// register additional worlds here, for example:
-				// .AddWorld (new EcsWorld (), "events")
+				.Add(new RunAddBoidImpactSystem());
 #if UNITY_EDITOR
-				// add debug systems for custom worlds here, for example:
-				// .Add (new Leopotam.EcsLite.UnityEditor.EcsWorldDebugSystem ("events"))
-				.Add(new Leopotam.EcsLite.UnityEditor.EcsWorldDebugSystem())
+			// add debug systems for custom worlds here, for example:
+			// .Add (new Leopotam.EcsLite.UnityEditor.EcsWorldDebugSystem ("events"))
+			_updateSystems.Add(new Leopotam.EcsLite.UnityEditor.EcsWorldDebugSystem());
 #endif
+			_updateSystems
 				.ConvertScene()
 				.Inject(new KDTree())
 				.Init();
+
 		}
 
 		private void Update()
 		{
-			_systems?.Run();
+			_updateSystems?.Run();
 		}
 
 		private void OnDestroy()
 		{
-			if (_systems != null)
+			if (_updateSystems != null)
 			{
-				_systems.Destroy();
-				// add here cleanup for custom worlds, for example:
-				// _systems.GetWorld ("events").Destroy ();
-				_systems.GetWorld().Destroy();
-				_systems = null;
+				_updateSystems.Destroy();
+				_updateSystems.GetWorld().Destroy();
+				_updateSystems = null;
+			}
+		}
+
+		private IEnumerator Spawn()
+		{
+			for (int i = 0; i < 512; i++)
+			{
+				Instantiate(prefab, Random.insideUnitSphere * 16, Random.rotation);
+				yield return null;
 			}
 		}
 	}

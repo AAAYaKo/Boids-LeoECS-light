@@ -1,6 +1,7 @@
 using AAAAYaKo.EcsTransformJobs;
 using Leopotam.EcsLite;
 using Unity.Collections;
+using UnityEngine;
 using UnityEngine.Jobs;
 
 namespace Client
@@ -12,18 +13,16 @@ namespace Client
 			return world.Filter<Position>().Inc<RealTransform>().End();
 		}
 
+		protected override Transform GetTransform(RealTransform transform)
+		{
+			return transform.Transform;
+		}
+
 		protected override EcsWorld GetWorld(EcsSystems systems)
 		{
 			return systems.GetWorld();
 		}
 
-		public override void OnEntityTransformsPoolCanged()
-		{
-			_transforms.Clear();
-			foreach (var transform in _poolTransform.GetRawDenseItems())
-				_transforms.Add(transform.Transform);
-			RebuildTransformAccessArray(_transforms.ToArray());
-		}
 		public struct Job : IEcsUnityTransformsJob<Position>
 		{
 			NativeArray<int> _entities;

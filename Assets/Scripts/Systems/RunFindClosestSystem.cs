@@ -4,6 +4,7 @@ using Leopotam.EcsLite.Di;
 using Leopotam.EcsLite.Threads;
 using System.Collections.Generic;
 using Unity.Mathematics;
+using UnityEngine;
 
 namespace Client
 {
@@ -11,11 +12,14 @@ namespace Client
 	{
 		[EcsInject] private readonly KDTree _tree;
 		[EcsWorld] private readonly EcsWorld _world;
+		private readonly Pool<KDQuery> queriesPool = new Pool<KDQuery>();
+		private readonly Pool<List<int>> resultIdsPool = new Pool<List<int>>();
+		private readonly Dictionary<float3, int> dictionary = new Dictionary<float3, int>();
 
 
 		protected override int GetChunkSize(EcsSystems systems)
 		{
-			return 32;
+			return 64;
 		}
 
 		protected override EcsFilter GetFilter(EcsWorld world)
@@ -32,6 +36,10 @@ namespace Client
 		{
 			thread.Tree = _tree;
 			thread.World = _world;
+			thread.QueriesPool = queriesPool;
+			thread.ResultIdsPool = resultIdsPool;
+			thread.Dictionary = dictionary;
+			thread.FillDictionary();
 		}
 	}
 
@@ -39,46 +47,40 @@ namespace Client
 	{
 		public KDTree Tree;
 		public EcsWorld World;
+		public Pool<KDQuery> QueriesPool;
+		public Pool<List<int>> ResultIdsPool;
+		public Dictionary<float3, int> Dictionary;
 		private int[] _entities;
 		private Boid[] _boidPool;
 		private Position[] _positionPool;
 		private int[] _boidIndices;
 		private int[] _positionIndices;
-		private Pool<KDQuery> queriesPool;
-		private Pool<List<int>> resultIdsPool;
-		private Pool<List<float3>> resultsPool;
 
 
 		public void Execute(int fromIndex, int beforeIndex)
 		{
-			var query = queriesPool.Get();
-			var resultIds = resultIdsPool.Get();
-			var results = resultsPool.Get();
+			var query = QueriesPool.Get();
+			var resultIds = ResultIdsPool.Get();
 			for (int i = fromIndex; i < beforeIndex; i++)
 			{
 				resultIds.Clear();
-				results.Clear();
-
 				var entity = _entities[i];
 				ref var boid = ref _boidPool[_boidIndices[entity]];
 				ref var position = ref _positionPool[_positionIndices[entity]];
 
 				if (boid.Closest == null) boid.Closest = new List<EcsPackedEntity>();
-				var point = position;
-				query.Radius(Tree, point.Value, 7, resultIds);
-				foreach (var result in resultIds)
-					results.Add(Tree.Points[result]);
+				var point = position.Value;
+				query.Radius(Tree, point, 8, resultIds);
 				boid.Closest.Clear();
-				foreach (var other in _entities)
+				foreach (var result in resultIds)
 				{
-					if (other == entity) continue;
-					if (results.Contains(_positionPool[other].Value))
-						boid.Closest.Add(World.PackEntity(other));
+					var other = Tree.Points[result];
+					if ((Vector3)point == other) continue;
+					boid.Closest.Add(World.PackEntity(Dictionary[other]));
 				}
 			}
-			queriesPool.Return(query);
-			resultsPool.Return(results);
-			resultIdsPool.Return(resultIds);
+			QueriesPool.Return(query);
+			ResultIdsPool.Return(resultIds);
 		}
 
 		public void Init(int[] entities, Boid[] pool1, int[] indices1, Position[] pool2, int[] indices2)
@@ -88,33 +90,36 @@ namespace Client
 			_positionPool = pool2;
 			_boidPool = pool1;
 			_positionIndices = indices2;
-			queriesPool = new Pool<KDQuery>();
-			resultIdsPool = new Pool<List<int>>();
-			resultsPool = new Pool<List<float3>>();
 		}
 
-		private class Pool<T> where T : new()
+		public void FillDictionary()
 		{
-			private readonly Stack<T> _pool = new Stack<T>();
+			Dictionary.Clear();
+			foreach (var entity in _entities)
+				Dictionary[_positionPool[_positionIndices[entity]].Value] = entity;
+		}
+	}
+	public class Pool<T> where T : new()
+	{
+		private readonly Stack<T> _pool = new Stack<T>();
 
 
-			public T Get()
+		public T Get()
+		{
+			lock (_pool)
 			{
-				lock (_pool)
-				{
-					if (_pool.Count == 0)
-						return new T();
-					else
-						return _pool.Pop();
-				}
+				if (_pool.Count == 0)
+					return new T();
+				else
+					return _pool.Pop();
 			}
+		}
 
-			public void Return(T pooled)
+		public void Return(T pooled)
+		{
+			lock (_pool)
 			{
-				lock (_pool)
-				{
-					_pool.Push(pooled);
-				}
+				_pool.Push(pooled);
 			}
 		}
 	}

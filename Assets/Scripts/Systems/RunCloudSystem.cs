@@ -27,7 +27,7 @@ namespace Client
 				arrayID++;
 			}
 
-			_tree.Build(points, 16);
+			_tree.Build(points, 8);
 		}
 	}
 }

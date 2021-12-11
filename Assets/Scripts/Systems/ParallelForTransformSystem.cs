@@ -54,10 +54,20 @@ namespace AAAAYaKo.EcsTransformJobs
 			_transformAccessArray.Dispose();
 		}
 
+		protected override void OnEntityTransformsPoolCanged()
+		{
+			_transforms.Clear();
+			foreach (var entity in _filter)
+				_transforms.Add(GetTransform(_poolTransform.Get(entity)));
+			RebuildTransformAccessArray(_transforms.ToArray());
+		}
+
+		protected abstract Transform GetTransform(TTransform transform);
+
 		protected virtual void SetData(EcsSystems systems, ref TJob job) { }
 	}
 
-	public abstract class EcsUnityJobSystem<TJob, T1, T2, TTransform> : EcsUnityJobTransformsSystemBase
+	public abstract class EcsUnityTransformJobSystem<TJob, T1, T2, TTransform> : EcsUnityJobTransformsSystemBase
 		where TJob : struct, IEcsUnityJob<T1, T2>
 		where T1 : unmanaged
 		where T2 : unmanaged
@@ -67,7 +77,7 @@ namespace AAAAYaKo.EcsTransformJobs
 		private EcsFilter _filterTransform;
 		private EcsPool<T1> _pool1;
 		private EcsPool<T2> _pool2;
-		protected EcsPool<TTransform> _poolTransform;
+		private EcsPool<TTransform> _poolTransform;
 		private FilterEventListener _eventListener;
 
 
@@ -110,6 +120,16 @@ namespace AAAAYaKo.EcsTransformJobs
 			_transformAccessArray.Dispose();
 		}
 
+		protected override void OnEntityTransformsPoolCanged()
+		{
+			_transforms.Clear();
+			foreach (var entity in _filter)
+				_transforms.Add(GetTransform(_poolTransform.Get(entity)));
+			RebuildTransformAccessArray(_transforms.ToArray());
+		}
+
+		protected abstract Transform GetTransform(TTransform transform);
+
 		protected virtual void SetData(EcsSystems systems, ref TJob job) { }
 	}
 
@@ -124,7 +144,7 @@ namespace AAAAYaKo.EcsTransformJobs
 		public abstract void Destroy(EcsSystems systems);
 		protected abstract EcsFilter GetFilter(EcsWorld world);
 		protected abstract EcsWorld GetWorld(EcsSystems systems);
-		public abstract void OnEntityTransformsPoolCanged();
+		protected abstract void OnEntityTransformsPoolCanged();
 		protected void RebuildTransformAccessArray(Transform[] transforms)
 		{
 			if (_transformAccessArray.isCreated) _transformAccessArray.Dispose();
